@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CountUp from 'react-countup';
-// import { useAuth } from './AuthContext'; // Assuming you have an AuthContext
-import { AuthContext } from '../../../Pages/AuthContext/Authprovider';
+import axios from 'axios';
 
 const FridgePage = () => {
   const [foodItems, setFoodItems] = useState([]);
@@ -15,39 +14,16 @@ const FridgePage = () => {
   const [expiredCount, setExpiredCount] = useState(0);
   const [nearlyExpiredCount, setNearlyExpiredCount] = useState(0);
   const navigate = useNavigate();
-  const { user } = useContext(AuthContext); // Get current user from auth context
 
   useEffect(() => {
     const fetchFoodItems = async () => {
       try {
-        if (!user) {
-          setLoading(false);
-          return;
-        }
+        setLoading(true);
+        setError(null);
 
-        const token = localStorage.getItem('token');
-        if (!token) {
-          throw new Error('No authentication token found');
-        }
+        const response = await axios.get('http://localhost:3000/addfood');
+        const data = response.data;
 
-        const response = await fetch(`http://localhost:3000/addfood?userId=${user.uid}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            // Handle unauthorized access
-            localStorage.removeItem('token');
-            navigate('/login');
-            throw new Error('Session expired. Please login again.');
-          }
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-
-        const data = await response.json();
         setFoodItems(data);
         setFilteredItems(data);
 
@@ -73,20 +49,34 @@ const FridgePage = () => {
         setExpiredCount(expired);
         setNearlyExpiredCount(nearlyExpired);
 
-        setLoading(false);
       } catch (err) {
-        setError(err.message);
+        setError(err.message || 'Failed to fetch food items');
+      } finally {
         setLoading(false);
-        if (err.message.includes('Session expired')) {
-          navigate('/login');
-        }
       }
     };
 
     fetchFoodItems();
-  }, [user, navigate]);
+  }, []);
 
-  // ... rest of the component remains the same ...
+  // Filter items based on search term and category
+  useEffect(() => {
+    let filtered = [...foodItems];
+
+    if (searchTerm) {
+      filtered = filtered.filter(item =>
+        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.category && item.category.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+    }
+
+    if (selectedCategory !== 'All') {
+      filtered = filtered.filter(item => item.category === selectedCategory);
+    }
+
+    setFilteredItems(filtered);
+  }, [searchTerm, selectedCategory, foodItems]);
+
   const isExpired = (expiryDate) => {
     return new Date(expiryDate) < new Date();
   };
@@ -108,20 +98,6 @@ const FridgePage = () => {
     <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
       <strong className="font-bold">Error: </strong>
       <span className="block sm:inline">{error}</span>
-    </div>
-  );
-
-  if (!user) return (
-    <div className="flex justify-center items-center h-screen">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold mb-4">Please login to view your fridge</h2>
-        <button
-          onClick={() => navigate('/login')}
-          className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded"
-        >
-          Go to Login
-        </button>
-      </div>
     </div>
   );
 
@@ -185,23 +161,23 @@ const FridgePage = () => {
       </div>
 
       {/* Results Count */}
-      {searchTerm || selectedCategory !== 'All' ? (
+      {(searchTerm || selectedCategory !== 'All') && (
         <p className="text-gray-600 mb-4">
           Showing {filteredItems.length} of {foodItems.length} items
         </p>
-      ) : null}
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {filteredItems.length > 0 ? (
           filteredItems.map((item) => (
             <div
-              key={item._id || item.id}
+              key={item._id}
               className="bg-white rounded-lg shadow-md overflow-hidden transition-transform duration-300 hover:-translate-y-1 hover:shadow-lg"
             >
               <div className="h-48 overflow-hidden">
                 <img
                   src={item.imageUrl || '/default-food-image.jpg'}
-                  alt={item.name || item.title}
+                  alt={item.name}
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     e.target.src = '/default-food-image.jpg';
@@ -210,9 +186,12 @@ const FridgePage = () => {
               </div>
 
               <div className="p-4">
-                <h3 className="text-lg font-semibold text-gray-800 mb-1">{item.name || item.title}</h3>
-                <p className="text-sm text-gray-600 mb-1">Category: {item.category}</p>
-                <p className="text-sm text-gray-600 mb-2">Qty: {item.quantity}</p>
+                <h3 className="text-lg font-semibold text-gray-800 mb-1">{item.name}</h3>
+                <p className="text-sm text-gray-600 mb-1">Category: {item.category || 'Uncategorized'}</p>
+                <p className="text-sm text-gray-600 mb-2">Qty: {item.quantity || 'N/A'}</p>
+                <p className="text-sm text-gray-600 mb-2">
+                  Expires: {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : 'N/A'}
+                </p>
 
                 {item.expiryDate && isExpired(item.expiryDate) && (
                   <span className="inline-block bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full mb-2">
@@ -227,7 +206,7 @@ const FridgePage = () => {
                 )}
 
                 <button
-                  onClick={() => navigate(`/food/${item._id || item.id}`)}
+                  onClick={() => navigate(`/food/${item._id}`)}
                   className="w-full mt-2 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded transition-colors duration-300"
                 >
                   See Details
