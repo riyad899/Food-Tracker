@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { AuthContext } from '../../../Pages/AuthContext/Authprovider';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -7,6 +7,7 @@ import 'react-toastify/dist/ReactToastify.css';
 export const AddFood = () => {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
+  const { id } = useParams();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -15,8 +16,8 @@ export const AddFood = () => {
     expiryDate: '',
     description: '',
     imageUrl: '',
-    userEmail: user?.email || '',
-    userId: user?.uid || ''
+    userEmail: '',
+    userId: ''
   });
 
   const [isDragging, setIsDragging] = useState(false);
@@ -24,66 +25,108 @@ export const AddFood = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const [error, setError] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // imgBB API key
   const apiKey = 'd887aa1f55a982c1a6829f027d626c89';
 
-  // Initialize user data when component mounts or user changes
   useEffect(() => {
     if (!user) {
       navigate('/login', { state: { from: '/addfood' } });
       return;
     }
 
-    setFormData(prev => ({
-      ...prev,
-      userEmail: user.email || '',
-      userId: user.uid || ''
-    }));
-  }, [user, navigate]);
+    const initializeForm = async () => {
+      setFormData(prev => ({
+        ...prev,
+        userEmail: user.email,
+        userId: user.uid
+      }));
+
+      if (id) {
+        setIsEditMode(true);
+        await fetchFoodItem(id);
+      }
+      setIsLoading(false);
+    };
+
+    initializeForm();
+  }, [user, navigate, id]);
+
+  const fetchFoodItem = async (foodId) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('No authentication token found');
+
+      const response = await fetch(`http://localhost:3000/addfood/${foodId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem('token');
+          navigate('/login');
+          throw new Error('Session expired. Please login again.');
+        }
+        throw new Error(`Failed to fetch food item: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setFormData({
+        name: data.name,
+        category: data.category,
+        quantity: data.quantity,
+        expiryDate: data.expiryDate.split('T')[0],
+        description: data.description,
+        imageUrl: data.imageUrl,
+        userEmail: data.userEmail,
+        userId: data.userId
+      });
+
+      if (data.imageUrl) setPreviewImage(data.imageUrl);
+    } catch (err) {
+      setError(err.message);
+      toast.error(err.message);
+      console.error('Fetch error:', err);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Drag and drop handlers
-  const handleDragEnter = useCallback((e) => {
+  const handleDragEnter = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
-  }, []);
+  };
 
-  const handleDragLeave = useCallback((e) => {
+  const handleDragLeave = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-  }, []);
+  };
 
-  const handleDragOver = useCallback((e) => {
+  const handleDragOver = (e) => {
     e.preventDefault();
     e.stopPropagation();
-  }, []);
+  };
 
-  const handleDrop = useCallback((e) => {
+  const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-
     const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      handleImageUpload(files[0]);
-    }
-  }, []);
+    if (files?.length) handleImageUpload(files[0]);
+  };
 
   const handleFileInput = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      handleImageUpload(file);
-    }
+    if (file) handleImageUpload(file);
   };
 
   const handleImageUpload = async (file) => {
@@ -103,49 +146,24 @@ export const AddFood = () => {
     setIsUploading(true);
     setUploadProgress(0);
 
-    // Preview image
     const reader = new FileReader();
-    reader.onload = (e) => {
-      setPreviewImage(e.target.result);
-    };
+    reader.onload = (e) => setPreviewImage(e.target.result);
     reader.readAsDataURL(file);
 
-    // Upload to imgBB
     const formData = new FormData();
     formData.append('image', file);
 
     try {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', `https://api.imgbb.com/1/upload?key=${apiKey}`, true);
-
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const percentCompleted = Math.round((e.loaded * 100) / e.total);
-          setUploadProgress(percentCompleted);
-        }
-      };
-
-      const promise = new Promise((resolve, reject) => {
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            const data = JSON.parse(xhr.responseText);
-            resolve(data);
-          } else {
-            reject(new Error(xhr.statusText));
-          }
-        };
-        xhr.onerror = () => reject(new Error('Network error'));
+      const response = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
+        method: 'POST',
+        body: formData
       });
 
-      xhr.send(formData);
+      if (!response.ok) throw new Error('Image upload failed');
 
-      const data = await promise;
-
+      const data = await response.json();
       if (data.success) {
-        setFormData(prev => ({
-          ...prev,
-          imageUrl: data.data.url
-        }));
+        setFormData(prev => ({ ...prev, imageUrl: data.data.url }));
         toast.success('Image uploaded successfully!');
       } else {
         throw new Error(data.error?.message || 'Image upload failed');
@@ -170,7 +188,9 @@ export const AddFood = () => {
     }
 
     try {
-      // Prepare the data to send to the backend
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('No authentication token found');
+
       const foodData = {
         name: formData.name,
         category: formData.category,
@@ -184,49 +204,62 @@ export const AddFood = () => {
         addedDate: new Date().toISOString()
       };
 
-      // Show loading toast
-      const toastId = toast.loading('Adding food item...');
+      const toastId = toast.loading(isEditMode ? 'Updating...' : 'Adding...');
 
-      // Make POST request to your backend API
-     const response = await axios.post('http://localhost:3000/addfood', foodData, {
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${localStorage.getItem('token')}`
-  }
-});
+      const url = isEditMode
+        ? `http://localhost:3000/addfood/${id}`
+        : 'http://localhost:3000/addfood';
+
+      const method = isEditMode ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(foodData)
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Server error:', errorData);
-        throw new Error(errorData.error || 'Failed to add food item');
+        throw new Error(errorData.error || 'Operation failed');
       }
 
-      // Update toast to success
       toast.update(toastId, {
-        render: 'Food item added successfully!',
+        render: isEditMode ? 'Updated successfully!' : 'Added successfully!',
         type: 'success',
         isLoading: false,
-        autoClose: 3000,
-        closeButton: true
+        autoClose: 3000
       });
 
-      // Redirect after a short delay
-      setTimeout(() => {
-        navigate('/my-items');
-      }, 1500);
-
+      setTimeout(() => navigate('/my-items'), 1500);
     } catch (err) {
-      setError(err.message || 'Failed to add food item');
-      toast.error(err.message || 'Failed to add food item');
-      console.error('Error adding food item:', err);
+      setError(err.message);
+      toast.error(err.message);
+      console.error('Submission error:', err);
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
-      <div className="mt-[100px] min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6 sm:p-8">
-          <p className="text-center text-gray-600">Loading...</p>
+      <div className="flex justify-center items-center h-screen">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-4">Please login to continue</h2>
+          <button
+            onClick={() => navigate('/login')}
+            className="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded"
+          >
+            Go to Login
+          </button>
         </div>
       </div>
     );
@@ -234,23 +267,16 @@ export const AddFood = () => {
 
   return (
     <div className="mt-[100px] min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <ToastContainer
-        position="top-right"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="light"
-      />
+      <ToastContainer position="top-right" autoClose={5000} />
 
       <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6 sm:p-8">
         <div className="text-center mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-green-700">Add Food Item</h1>
-          <p className="mt-2 text-gray-600">Share details about the food you want to add</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-green-700">
+            {isEditMode ? 'Edit Food Item' : 'Add Food Item'}
+          </h1>
+          <p className="mt-2 text-gray-600">
+            {isEditMode ? 'Update your food details' : 'Share details about your food'}
+          </p>
         </div>
 
         {error && (
@@ -259,24 +285,22 @@ export const AddFood = () => {
           </div>
         )}
 
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          {/* Food Title */}
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Food Title <span className="text-red-500">*</span>
+              Food Name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               name="name"
               value={formData.name}
               onChange={handleChange}
-              placeholder="e.g., Fresh Milk, Organic Apples"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+              placeholder="e.g., Organic Apples"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
               required
             />
           </div>
 
-          {/* Category and Quantity */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -286,16 +310,11 @@ export const AddFood = () => {
                 name="category"
                 value={formData.category}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
               >
-                <option value="Dairy">Dairy</option>
-                <option value="Meat">Meat</option>
-                <option value="Vegetables">Vegetables</option>
-                <option value="Fruits">Fruits</option>
-                <option value="Grains">Grains</option>
-                <option value="Snacks">Snacks</option>
-                <option value="Beverages">Beverages</option>
-                <option value="Other">Other</option>
+                {['Dairy', 'Meat', 'Vegetables', 'Fruits', 'Grains', 'Snacks', 'Beverages', 'Other'].map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -307,14 +326,13 @@ export const AddFood = () => {
                 name="quantity"
                 value={formData.quantity}
                 onChange={handleChange}
-                placeholder="e.g., 1 liter, 500g, 5 pieces"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                placeholder="e.g., 1 kg, 5 pieces"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                 required
               />
             </div>
           </div>
 
-          {/* Expiry Date */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Expiry Date <span className="text-red-500">*</span>
@@ -324,30 +342,28 @@ export const AddFood = () => {
               name="expiryDate"
               value={formData.expiryDate}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
               required
             />
           </div>
 
-          {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description (Optional)
+              Description
             </label>
             <textarea
               name="description"
               rows={3}
               value={formData.description}
               onChange={handleChange}
-              placeholder="Any additional details about the food item..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+              placeholder="Additional details..."
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
             />
           </div>
 
-          {/* Image Upload */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Food Image (Optional)
+              Food Image
             </label>
             <div
               className={`border-2 border-dashed rounded-lg p-6 text-center transition ${
@@ -379,29 +395,18 @@ export const AddFood = () => {
               ) : (
                 <>
                   <div className="flex flex-col items-center justify-center space-y-2">
-                    <svg
-                      className="w-12 h-12 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      ></path>
+                    <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                     <p className="text-sm text-gray-600">
-                      Drag and drop an image here, or click to select
+                      Drag and drop or click to select
                     </p>
                     {isUploading && (
                       <div className="w-full bg-gray-200 rounded-full h-2.5">
                         <div
                           className="bg-green-600 h-2.5 rounded-full"
                           style={{ width: `${uploadProgress}%` }}
-                        ></div>
+                        />
                       </div>
                     )}
                   </div>
@@ -423,32 +428,15 @@ export const AddFood = () => {
             </div>
           </div>
 
-          {/* User Email (auto-filled from auth) */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Your Email
-            </label>
-            <input
-              type="email"
-              name="userEmail"
-              value={formData.userEmail}
-              readOnly
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed"
-            />
-          </div>
-
-          {/* Submit Button */}
           <div className="pt-4">
             <button
               type="submit"
               disabled={isUploading}
-              className={`w-full py-3 px-4 text-white font-medium rounded-lg shadow-md transition duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 ${
-                isUploading
-                  ? 'bg-green-400 cursor-not-allowed'
-                  : 'bg-green-600 hover:bg-green-700'
+              className={`w-full py-3 px-4 text-white font-medium rounded-lg shadow-md ${
+                isUploading ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
               }`}
             >
-              {isUploading ? 'Uploading...' : 'Add Food Item'}
+              {isUploading ? 'Processing...' : (isEditMode ? 'Update Food Item' : 'Add Food Item')}
             </button>
           </div>
         </form>
