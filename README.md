@@ -1,12 +1,33 @@
-# React + Vite
+# Frabjous Treacle Project
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+![Netlify Status](https://api.netlify.com/api/v1/badges/df48ebde-xxxx-xxxx-xxxx-xxxxxxxxxxxx/deploy-status)
 
-Currently, two official plugins are available:
+A web project hosted on Netlify with a whimsical name.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Live Demo
 
-## Expanding the ESLint configuration
+👉 [https://frabjous-treacle-df48eb.netlify.app/](https://frabjous-treacle-df48eb.netlify.app/)
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Features
+
+- [Feature 1]
+- [Feature 2]
+- [Feature 3]
+
+## Technologies Used
+
+- [List your technologies/frameworks here]
+  - HTML5
+  - CSS3
+  - JavaScript
+  - [Any other frameworks/libraries]
+
+## Installation
+
+If you want to run this project locally:
+
+```bash
+git clone [your-repository-url]
+cd project-directory
+npm install  # if using npm
+npm start    # or appropriate start command
