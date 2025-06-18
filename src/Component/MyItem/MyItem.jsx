@@ -95,7 +95,11 @@ export const MyItem = () => {
 
     const fetchFoodItems = async () => {
         try {
-            const response = await fetch(`http://localhost:3000/addfood?userId=${user?.uid}`);
+            const response = await fetch(`http://localhost:3000/addfood?userId=${user?.uid}`, {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem('token')}`
+                }
+            });
             if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
             const data = await response.json();
             setFoodItems(data);

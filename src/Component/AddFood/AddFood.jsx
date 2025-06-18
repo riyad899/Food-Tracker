@@ -188,13 +188,12 @@ export const AddFood = () => {
       const toastId = toast.loading('Adding food item...');
 
       // Make POST request to your backend API
-      const response = await fetch('http://localhost:3000/addfood', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(foodData)
-      });
+     const response = await axios.post('http://localhost:3000/addfood', foodData, {
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${localStorage.getItem('token')}`
+  }
+});
 
       if (!response.ok) {
         const errorData = await response.json();
