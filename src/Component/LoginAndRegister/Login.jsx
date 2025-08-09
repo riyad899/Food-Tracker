@@ -1,22 +1,22 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import GoogleButton from 'react-google-button';
 import { motion } from 'framer-motion';
 import { FaUser, FaLock, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
-// import app from '../../Firebase/firebase.config';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import app from '../../../Firebase/firebase.config';
+import { AuthContext } from '../../../Pages/AuthContext/Authprovider';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export const Login = () => {
+  const { loginUser, googleLogin } = useContext(AuthContext);
+  const { isDark } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const auth = getAuth(app);
 
   // Animation variants
   const containerVariants = {
@@ -62,7 +62,7 @@ export const Login = () => {
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await loginUser(email, password);
       toast.success('🎉 Successfully logged in!', {
         position: "top-right",
         autoClose: 2000,
@@ -81,6 +81,8 @@ export const Login = () => {
         errorMessage = 'User not found';
       } else if (err.code === 'auth/wrong-password') {
         errorMessage = 'Incorrect password';
+      } else if (err.code === 'auth/invalid-credential') {
+        errorMessage = 'Invalid email or password';
       }
 
       setError(errorMessage);
@@ -93,6 +95,7 @@ export const Login = () => {
         draggable: true,
         progress: undefined,
       });
+    } finally {
       setLoading(false);
     }
   };
@@ -100,10 +103,16 @@ export const Login = () => {
   const handleGoogleSignIn = async () => {
     setError('');
     setLoading(true);
-    const provider = new GoogleAuthProvider();
 
     try {
-      await signInWithPopup(auth, provider);
+      const result = await googleLogin();
+      console.log('Google login user data:', {
+        displayName: result.user.displayName,
+        email: result.user.email,
+        photoURL: result.user.photoURL,
+        uid: result.user.uid
+      });
+
       toast.success('🎉 Google login successful!', {
         position: "top-right",
         autoClose: 2000,
@@ -115,8 +124,18 @@ export const Login = () => {
       });
       setTimeout(() => navigate('/'), 1500);
     } catch (err) {
-      setError(err.message);
-      toast.error(`❌ Google login failed: ${err.message}`, {
+      let errorMessage = 'Google login failed';
+      if (err.code === 'auth/popup-closed-by-user') {
+        errorMessage = 'Login cancelled by user';
+      } else if (err.code === 'auth/popup-blocked') {
+        errorMessage = 'Popup blocked by browser. Please allow popups and try again';
+      } else if (err.code === 'auth/cancelled-popup-request') {
+        errorMessage = 'Login request cancelled';
+      }
+
+      console.error('Google login error:', err);
+      setError(errorMessage);
+      toast.error(`❌ ${errorMessage}`, {
         position: "top-right",
         autoClose: 4000,
         hideProgressBar: false,
@@ -125,6 +144,7 @@ export const Login = () => {
         draggable: true,
         progress: undefined,
       });
+    } finally {
       setLoading(false);
     }
   };
@@ -135,7 +155,13 @@ export const Login = () => {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.5 }}
-      className="min-h-screen bg-gradient-to-br from-[#124A2F] to-[#0D3521] flex items-center justify-center p-4"
+      className={`
+        min-h-screen flex items-center justify-center p-4 transition-all duration-300
+        ${isDark
+          ? 'bg-gradient-to-br from-gray-800 to-gray-900'
+          : 'bg-gradient-to-br from-[#124A2F] to-[#0D3521]'
+        }
+      `}
     >
       <ToastContainer
         position="top-right"
@@ -165,7 +191,10 @@ export const Login = () => {
             transition={{ type: "spring", stiffness: 400, damping: 10 }}
           />
           <motion.h1
-            className="text-4xl font-bold text-white mt-6"
+            className={`
+              text-4xl font-bold mt-6
+              ${isDark ? 'text-gray-100' : 'text-white'}
+            `}
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.3 }}
@@ -173,7 +202,10 @@ export const Login = () => {
             Welcome Back!
           </motion.h1>
           <motion.p
-            className="text-lg text-gray-200 mt-2"
+            className={`
+              text-lg mt-2
+              ${isDark ? 'text-gray-300' : 'text-gray-200'}
+            `}
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.4 }}
@@ -189,8 +221,17 @@ export const Login = () => {
           animate="visible"
           className="w-full max-w-md"
         >
-          <form onSubmit={handleLogin} className="bg-white rounded-2xl shadow-xl overflow-hidden">
-            <div className="p-1 bg-gradient-to-r from-[#124A2F] to-[#1a6d45]"></div>
+          <form onSubmit={handleLogin} className={`
+            rounded-2xl shadow-xl overflow-hidden
+            ${isDark ? 'bg-gray-800' : 'bg-white'}
+          `}>
+            <div className={`
+              p-1
+              ${isDark
+                ? 'bg-gradient-to-r from-gray-700 to-gray-600'
+                : 'bg-gradient-to-r from-[#124A2F] to-[#1a6d45]'
+              }
+            `}></div>
 
             <motion.div
               variants={containerVariants}
@@ -200,7 +241,10 @@ export const Login = () => {
             >
               <motion.h2
                 variants={itemVariants}
-                className="text-3xl font-bold text-center text-gray-800 mb-8"
+                className={`
+                  text-3xl font-bold text-center mb-8
+                  ${isDark ? 'text-gray-100' : 'text-gray-800'}
+                `}
               >
                 Sign In
               </motion.h2>
@@ -208,21 +252,44 @@ export const Login = () => {
               {error && (
                 <motion.div
                   variants={itemVariants}
-                  className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm"
+                  className={`
+                    mb-4 p-3 rounded-lg text-sm
+                    ${isDark
+                      ? 'bg-red-900/50 text-red-200 border border-red-700'
+                      : 'bg-red-100 text-red-700'
+                    }
+                  `}
                 >
                   {error}
                 </motion.div>
               )}
 
               <motion.div variants={itemVariants} className="mb-6">
-                <label className="block text-gray-700 text-sm font-medium mb-2 flex items-center">
-                  <FaUser className="mr-2 text-[#124A2F]" />
+                <label className={`
+                  block text-sm font-medium mb-2 flex items-center
+                  ${isDark ? 'text-gray-200' : 'text-gray-700'}
+                `}>
+                  <FaUser className={`
+                    mr-2
+                    ${isDark ? 'text-green-400' : 'text-[#124A2F]'}
+                  `} />
                   Email
                 </label>
                 <motion.input
-                  whileFocus={{ scale: 1.02, boxShadow: "0 0 0 2px rgba(18, 74, 47, 0.5)" }}
+                  whileFocus={{
+                    scale: 1.02,
+                    boxShadow: isDark
+                      ? "0 0 0 2px rgba(34, 197, 94, 0.5)"
+                      : "0 0 0 2px rgba(18, 74, 47, 0.5)"
+                  }}
                   type="email"
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#124A2F] transition-all"
+                  className={`
+                    w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 transition-all
+                    ${isDark
+                      ? 'bg-gray-700 border-gray-600 text-gray-100 focus:ring-green-400 focus:border-green-400'
+                      : 'bg-white border-gray-300 text-gray-900 focus:ring-[#124A2F] focus:border-[#124A2F]'
+                    }
+                  `}
                   placeholder="your@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -231,15 +298,32 @@ export const Login = () => {
               </motion.div>
 
               <motion.div variants={itemVariants} className="mb-4">
-                <label className="block text-gray-700 text-sm font-medium mb-2 flex items-center">
-                  <FaLock className="mr-2 text-[#124A2F]" />
+                <label className={`
+                  block text-sm font-medium mb-2 flex items-center
+                  ${isDark ? 'text-gray-200' : 'text-gray-700'}
+                `}>
+                  <FaLock className={`
+                    mr-2
+                    ${isDark ? 'text-green-400' : 'text-[#124A2F]'}
+                  `} />
                   Password
                 </label>
                 <div className="relative">
                   <motion.input
-                    whileFocus={{ scale: 1.02, boxShadow: "0 0 0 2px rgba(18, 74, 47, 0.5)" }}
+                    whileFocus={{
+                      scale: 1.02,
+                      boxShadow: isDark
+                        ? "0 0 0 2px rgba(34, 197, 94, 0.5)"
+                        : "0 0 0 2px rgba(18, 74, 47, 0.5)"
+                    }}
                     type={showPassword ? "text" : "password"}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#124A2F] transition-all pr-10"
+                    className={`
+                      w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 transition-all pr-10
+                      ${isDark
+                        ? 'bg-gray-700 border-gray-600 text-gray-100 focus:ring-green-400 focus:border-green-400'
+                        : 'bg-white border-gray-300 text-gray-900 focus:ring-[#124A2F] focus:border-[#124A2F]'
+                      }
+                    `}
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -247,7 +331,13 @@ export const Login = () => {
                   />
                   <button
                     type="button"
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-[#124A2F]"
+                    className={`
+                      absolute inset-y-0 right-0 pr-3 flex items-center transition-colors
+                      ${isDark
+                        ? 'text-gray-400 hover:text-green-400'
+                        : 'text-gray-500 hover:text-[#124A2F]'
+                      }
+                    `}
                     onClick={() => setShowPassword(!showPassword)}
                   >
                     {showPassword ? <FaEyeSlash /> : <FaEye />}
@@ -258,7 +348,13 @@ export const Login = () => {
               <motion.div variants={itemVariants} className="flex justify-end mb-6">
                 <NavLink
                   to="/forgot-password"
-                  className="text-sm text-[#124A2F] hover:text-[#0D3521] transition-colors"
+                  className={`
+                    text-sm transition-colors
+                    ${isDark
+                      ? 'text-green-400 hover:text-green-300'
+                      : 'text-[#124A2F] hover:text-[#0D3521]'
+                    }
+                  `}
                 >
                   Forgot password?
                 </NavLink>
@@ -267,9 +363,20 @@ export const Login = () => {
               <motion.button
                 type="submit"
                 variants={itemVariants}
-                whileHover={{ scale: 1.02, boxShadow: "0 4px 12px rgba(18, 74, 47, 0.3)" }}
+                whileHover={{
+                  scale: 1.02,
+                  boxShadow: isDark
+                    ? "0 4px 12px rgba(34, 197, 94, 0.3)"
+                    : "0 4px 12px rgba(18, 74, 47, 0.3)"
+                }}
                 whileTap={{ scale: 0.98 }}
-                className="w-full bg-gradient-to-r from-[#124A2F] to-[#1a6d45] text-white py-3 px-4 rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-70"
+                className={`
+                  w-full py-3 px-4 rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-70
+                  ${isDark
+                    ? 'bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-500 hover:to-green-600'
+                    : 'bg-gradient-to-r from-[#124A2F] to-[#1a6d45] text-white'
+                  }
+                `}
                 disabled={loading}
               >
                 {loading ? 'Signing In...' : 'Login'}
@@ -277,10 +384,16 @@ export const Login = () => {
 
               <motion.div variants={itemVariants} className="relative my-6">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300"></div>
+                  <div className={`
+                    w-full border-t
+                    ${isDark ? 'border-gray-600' : 'border-gray-300'}
+                  `}></div>
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">Or continue with</span>
+                  <span className={`
+                    px-2
+                    ${isDark ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-500'}
+                  `}>Or continue with</span>
                 </div>
               </motion.div>
 
@@ -299,12 +412,21 @@ export const Login = () => {
 
               <motion.div
                 variants={itemVariants}
-                className="text-center mt-6 text-gray-600"
+                className={`
+                  text-center mt-6
+                  ${isDark ? 'text-gray-300' : 'text-gray-600'}
+                `}
               >
                 Don't have an account?{' '}
                 <NavLink
-                  to="/signup"
-                  className="text-[#124A2F] font-medium hover:text-[#0D3521] transition-colors"
+                  to="/register"
+                  className={`
+                    font-medium transition-colors
+                    ${isDark
+                      ? 'text-green-400 hover:text-green-300'
+                      : 'text-[#124A2F] hover:text-[#0D3521]'
+                    }
+                  `}
                 >
                   Sign up
                 </NavLink>

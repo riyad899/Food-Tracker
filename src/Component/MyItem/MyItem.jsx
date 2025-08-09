@@ -54,7 +54,7 @@ export const MyItem = () => {
     const handleUpdateSubmit = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch(`http://localhost:3000/addfood/${foodToUpdate}`, {
+            const response = await fetch(`https://server-sepia-nine.vercel.app/addfood/${foodToUpdate}`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -78,7 +78,7 @@ export const MyItem = () => {
         if (!foodToDelete) return;
 
         try {
-            const response = await fetch(`http://localhost:3000/addfood/${foodToDelete}`, {
+            const response = await fetch(`https://server-sepia-nine.vercel.app/addfood/${foodToDelete}`, {
                 method: 'DELETE'
             });
 
@@ -95,7 +95,7 @@ export const MyItem = () => {
 
     const fetchFoodItems = async () => {
         try {
-            const response = await fetch(`http://localhost:3000/addfood?userId=${user?.uid}`, {
+            const response = await fetch(`https://server-sepia-nine.vercel.app/addfood?userId=${user?.uid}`, {
                 headers: {
                     Authorization: `Bearer ${localStorage.getItem('token')}`
                 }
